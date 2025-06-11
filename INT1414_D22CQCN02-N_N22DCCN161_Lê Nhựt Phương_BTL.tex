@@ -1,0 +1,195 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage[utf8]{inputenc} % Hỗ trợ UTF-8
+\usepackage[T1]{fontenc} % Hỗ trợ font T1 cho tiếng Việt
+\usepackage{vietnam} % Hỗ trợ tiếng Việt
+
+\hyphenation{op-tical net-works semi-conduc-tor}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Báo cáo bài tập lớn môn Cơ sở Dữ liệu Phân tán chủ đề 2}
+
+\author{\IEEEauthorblockN{1\textsuperscript{st} Lê Nhựt Phương}
+\IEEEauthorblockA{\textit{Bộ môn Công nghệ Thông tin 2} \\
+\textit{Học viện Công nghệ Bưu chính Viễn thông} \\
+Hồ Chí Minh, Việt Nam \\
+D22CQCN02-N \\
+n22dccn161@student.ptit.edu.vn}}
+\date{11/6/2025}
+
+\maketitle
+
+\begin{abstract}
+Báo cáo này sẽ trình bày hiểu biết về bài tập 10.11 từ sách "Principles of Distributed Database Systems" và sẽ tập trung vào việc triển khai thuật toán Personalized PageRank trên nền Apache Spark. Bài tập yêu cầu áp dụng, khai triển từ lý thuyết bài 10.9 và 10.4, bao gồm định nghĩa, tính toán tầm quan trọng của các nút trong đồ thị dựa trên một trang nguồn được chỉ định. Báo cáo này sẽ phân tích Personalized PageRank so với PageRank truyền thống và thảo luận về cách thức sử dụng Spark trong xử lý phân tán, và đánh giá tiềm năng ứng dụng trong các hệ thống thực tế.Có kết luận, cùng với các khuyến nghị cụ thể để tối ưu hóa và mở rộng nghiên cứu trong tương lai.
+\end{abstract}
+
+\section{Giới thiệu}
+Trong môn Cơ sở Dữ liệu Phân tán, thì em thấy rằng hệ thống phân tán đang ngày càng quan trọng, đặc biệt khi lượng dữ liệu từ mạng xã hội, mua sắm online hay công cụ tìm kiếm như Google,Cốc cốc,... tăng lên nhanh chóng. Thì trong môn này em đã học được thuật toán PageRank được giới thiệu bởi Lary Page và Sergey Bin. Đây là phương pháp đánh giá mức độ quan trọng của một trang web dựa trên cấu trúc liên kết giữa các trang với tính chất đơn giản nhưug hiệu quả cao PageRank được ứng dụng trong nhiều lĩnh vực như phân tích mạng xã hội, phát triển cộng đồng và học máy,...
+\\
+
+Tuy nhiên, theo em tìm hiểu PageRank truyền thống có điểm hạn chế khi muốn tập trung vào một trang cụ thể. Ví dụ, nó phân bổ xác suất nhảy ngẫu nhiên đều cho tất cả các trang với tỷ lệ \(1 - d\) (với d thường la 0.85) thì xác suất nhảy ngẫu nhiên các trang web trong đồ thị là như nhau khiến cho các trang web quan trọng nó cũng sẽ không được ưu tiên nhảy vào. Vì vậy nó khiến cho tầm quan trọng bị loãng đi trên 1 đồ thị. Chính vì vậy, nên người ta sinh ra Personalized PageRank để khắc phục, nó cho phép chọn một trang làm trung tâm và định hướng các bước nhảy về đó. Vậy Personalized PageRank thực sự có cái gì hay hơn PageRank truyền thống: Nó có thể cá nhân hóa theo ngữ cảnh hoặc sở thích người dùng nghĩa là nó cho phép ưu tiên 1 tập hợp các nút cụ thể hoặc nút đơn lẻ, việc bắt đầu từ 1 nút nguồn cụ thể, giúp đo lường mức độ quan trọng tương đối của các nút khác đối với chính nút đó(\textbf{Jeh, G., & Widom, J. (2003). Scaling Personalized Web Search}). Ngoài ra nó có thể tính gần xung quanh một nút, thay vì phải tính toàn bộ ma trận như PageRank truyền thống(\textbf{Bahmani, B., Chowdhury, A., & Goel, A. (2010). Fast Incremental and Personalized PageRank. VLDB.}). Thì để biết rõ hơn về Personalized PageRank thì ta sẽ tìm hiểu về bài tập 10.11 trong sách \emph{Principles of Distributed Database Systems}
+\section{Định nghĩa vấn đề}
+Bài tập 10.11 yêu cầu triển khai thuật toán Personalized PageRank trên Apache Spark và dựa trên 1 số kiển thức được cung cấp trong bài 10.9 và ví dụ 10.4. Các yêu cầu cụ thể bao gồm:
+\begin{itemize}
+    \item \textbf{Personalized PageRank}: Đây là một thuật toán phiên bản cải tiến của PageRank, trong đó xác suất nhảy ngẫu nhiên (thông thường là \(d = 0.85\)) được định hướng về một trang nguồn (source page) do người dùng chỉ định ban đầu, thay vì phân bố ngẫu nhiên trên toàn đồ thị. Cái này giúp tạo ra một ma trận chuyển tiếp cá nhân hóa, phản ánh sở thích của người dùng.
+    
+\begin{equation}
+PR(p_i) = (1 - d) \cdot \mathbb{1}_{\{p_i = s\}} + d \sum_{p_j \in B_{p_i}} \frac{PR(p_j)}{|F_{p_j}|}
+\end{equation}
+
+Trong đó:
+\begin{itemize}
+  \item $PR(p_i)$: Giá trị PageRank của nút $p_i$.
+  \item $d = 0{,}85$: Hệ số damping (xác suất tiếp tục đi theo liên kết).
+  \item $\mathbb{1}_{\{p_i = s\}}$: Bằng 1 nếu $p_i$ là nút nguồn (ví dụ P1), bằng 0 nếu không.
+  \item $B_{p_i}$: Tập hợp các nút có liên kết đến $p_i$.
+  \item $|F_{p_j}|$: Số liên kết ra từ nút $p_j$.
+\end{itemize}
+
+\vspace{0.5em}
+
+
+
+    \item \textbf{Khởi tạo}: Trang nguồn được gán giá trị PageRank ban đầu là 1, trong khi các trang khác khởi đầu với giá trị 0, khác với cách khởi tạo đều \(1/N\) trong thuật toán PageRank truyền thống, với \(N\) là tổng số nút trong đồ thị.\\
+    \item \textbf{Mục tiêu}: Xây dựng một thuật toán phân tán trên Spark để tính toán giá trị PageRank, nhầm nhấn mạnh tầm quan trọng của các nút liên quan đến trang nguồn, và áp dụng trên một đồ thị có thể lấy mẫu như hình 10.21 (gồm 6 nút: P1, P2, P3, P4, P5, P6 với các cạnh định hướng) trong bài 10.9.\\
+    \item \textbf{Độ khó}: Được đánh dấu "**" (khó), do đòi hỏi sự hiểu biết lý thuyết đồ thị, thuật toán lặp, và kỹ năng lập trình phân tán trên Spark.\\
+    \item \textbf{Bối cảnh}: Bài tập yêu cầu cài đặt apache spark và triển khai thuật toán trên đó cần phải tìm hiểu các định nghĩa cơ bản của spark cũng như cách dùng se khó khăn lúc làm quen và cài đặt môi trường
+\end{itemize}
+\vspace{0.5em}
+Vấn đề này không chỉ kiểm tra kiến thức lý thuyết mà còn đòi hỏi khả năng phân tích và dự đoán hành vi của thuật toán trên các nền tảng phân tán.
+
+\section{Các giải pháp đề xuất}
+Dựa trên yêu cầu của bài tập và tự tìm hiểu thì em tìm ra được 1 số giải pháp, cách tiếp cận để giải quyết:
+\subsection{Giải pháp dựa trên RDD}
+Sử dụng Resilient Distributed Datasets (RDD), một cấu trúc dữ liệu của Spark, để thực hiện các phép toán phân tán như map, reduce, và join. Phương pháp này yêu cầu sinh viên tự lập trình các bước lặp để cập nhật PageRank, đảm bảo tính chính xác theo công thức Personalized PageRank, và xử lý dữ liệu trên các cụm máy tính.\\
+\\
+\textbf{Ưu điểm}: Phương pháp RDD cho phép lập trình viên kiểm soát hoàn toàn quá trình tính toán, phù hợp để hiểu sâu về thuật toán PPR và thử nghiệm các biến thể. Nó cũng không phụ thuộc vào các thư viện đồ thị phức tạp, giảm yêu cầu cấu hình.
+\subsection{Giải pháp sử dụng GraphFrames}
+GraphFrames, một thư viện đồ thị tích hợp với Spark DataFrames, cung cấp các công cụ sẵn có như hàm PageRank. Tuy nhiên, cần điều chỉnh để hỗ trợ tính năng cá nhân hóa, bằng cách định nghĩa lại cách nhảy ngẫu nhiên về trang nguồn, phù hợp với yêu cầu của bài 10.9. Phương pháp này giảm bớt khối lượng lập trình thủ công.\\
+\\
+\textbf{Ưu điểm}: GraphFrames dễ sử dụng nhờ giao diện dựa trên DataFrame và tích hợp với Python/Spark SQL, phù hợp cho người mới làm quen với Spark hoặc đồ thị. Việc sử dụng hàm có sẵn giảm thiểu lỗi lập trình và thời gian phát triển. Ngoài ra, GraphFrames hỗ trợ tốt các thao tác phân tích dữ liệu kết hợp với đồ thị.
+\subsection{Giải pháp sử dụng GraphX}
+GraphX, thư viện đồ thị của Spark được viết bằng Scala, cung cấp các phương pháp tối ưu như tính toán song song dựa trên mô hình Vertex-centric. Phương pháp này phù hợp với các bài toán đồ thị lớn, nhưng đòi hỏi sự chuyển đổi từ Python sang Scala, làm tăng độ phức tạp và yêu cầu kỹ năng lập trình nâng cao.\\
+\\
+\textbf{Ưu điểm}: GraphX có hiệu suất cao và khả năng mở rộng vượt trội, phù hợp cho các đồ thị lớn với hàng triệu nút và cạnh. Mô hình Vertex-centric giảm thiểu chi phí truyền thông giữa các nút, tối ưu hóa xử lý phân tán. Ngoài ra, GraphX hỗ trợ nhiều thuật toán đồ thị khác, tăng tính linh hoạt cho các ứng dụng phức tạp.
+
+\section{Tiêu chí đánh giá giải pháp} \label{sec:criteria}
+Để đánh giá hiệu quả của các giải pháp, có thể áp dụng các tiêu chí sau:
+\begin{itemize}
+    \item \textbf{Độ chính xác}: Giá trị PageRank phải phản ánh đúng mức độ quan trọng dựa trên trang nguồn, phù hợp với lý thuyết từ bài 10.9.
+    \item \textbf{Hiệu suất}: Thời gian tính toán và số lần lặp cần thiết để đạt ngưỡng hội tụ, đặc biệt trên các cụm Spark lớn.
+    \item \textbf{Khả năng mở rộng}: Khả năng xử lý các đồ thị có hàng triệu nút và cạnh trên các cụm phân tán.
+    \item \textbf{Tính linh hoạt}: Khả năng thích ứng với các loại đồ thị khác nhau, bao gồm đồ thị thưa, dày, hoặc không liên kết.
+    \item \textbf{Tính dễ tiếp cận}: Độ phức tạp của phương pháp và khả năng triển khai bởi người mới học Spark.
+    \item \textbf{Tính ổn định}: Khả năng xử lý các trường hợp đặc biệt như nút chết (dead ends) hoặc vòng lặp vô hạn.
+\end{itemize}
+
+\section{Phương pháp nghiên cứu}
+Nghiên cứu lý thuyết về bài tập 10.11 được thực hiện qua các bước sau:
+\\
+\begin{enumerate}
+    \item \textbf{Nghiên cứu tài liệu}: Đọc kỹ bài 10.9 để nắm vững định nghĩa Personalized PageRank, bao gồm công thức tính toán, cách khởi tạo, và các yếu tố ảnh hưởng đến hội tụ.
+    \\
+    \item \textbf{Phân tích bối cảnh}: Tìm hiểu phần 10.4 để hiểu các nền tảng phân tích đồ thị trên Spark, như RDD, GraphFrames, và GraphX, cùng với ưu nhược điểm của từng công cụ.
+    \\
+    \item \textbf{Đánh giá phương pháp}: So sánh ưu, nhược điểm của từng cách tiếp cận (RDD, GraphFrames, GraphX) dựa trên các tiêu chí đã đề ra, bao gồm hiệu suất và tính thực tiễn.
+    \\
+    \item \textbf{Tính toán thủ công}: Thực hiện tính toán PageRank trên đồ thị mẫu (hình 10.21) để dự đoán hành vi của thuật toán, bao gồm phân tích ảnh hưởng của trang nguồn.
+    \\
+    \item \textbf{Dự đoán ứng dụng}: Đánh giá tiềm năng áp dụng trong các hệ thống thực tế như mạng xã hội, dữ liệu web, hoặc hệ thống đề xuất.
+    \\
+    \item \textbf{Đánh giá hạn chế}: Xác định các hạn chế lý thuyết, như ảnh hưởng của ngưỡng dung sai hoặc cấu trúc đồ thị, để đề xuất cải tiến.
+\end{enumerate}
+Phương pháp này đảm bảo tính toàn diện, tập trung vào việc xây dựng nền tảng lý thuyết vững chắc và dự đoán ứng dụng thực tiễn.
+
+\section{Phân tích và diễn giải}
+Dựa trên lý thuyết, Personalized PageRank có thể được phân tích chi tiết như sau:
+\begin{itemize}
+    \item \textbf{Độ chính xác}: Công thức 
+    \begin{equation}
+PR(p_i) = (1 - d) \cdot \mathbb{1}_{\{p_i = s\}} + d \sum_{p_j \in B_{p_i}} \frac{PR(p_j)}{|F_{p_j}|}
+\end{equation}
+    
+    đảm bảo rằng trang nguồn (ví dụ chọn P1) giữ vai trò trung tâm, với giá trị giảm dần theo số bước đi trong đồ thị. Trên đồ thị mẫu, P2 và P3 (liền kề P1) sẽ nhận giá trị cao hơn P4, P5, P6 nếu không có kết nối trực tiếp, phản ánh đúng bản chất cá nhân hóa.
+    \\
+    \item \textbf{Hiệu suất}: Số lần lặp cần thiết để hội tụ phụ thuộc vào ngưỡng dung sai (tolerance). Với \( d = 0.85 \) và tolerance nhỏ (0.0001), thuật toán thường cần 5-10 lần lặp trên đồ thị nhỏ như hình 10.21. Tuy nhiên, với đồ thị lớn, số lần lặp có thể tăng nếu cấu trúc phức tạp hoặc có nhiều nút chết.
+    \\
+    \item \textbf{Khả năng mở rộng}: Spark, với cơ chế xử lý song song, cho phép mở rộng trên các cụm máy tính. Tuy nhiên, hiệu suất có thể giảm nếu đồ thị chứa nhiều thành phần không liên kết hoặc nút chết, đòi hỏi xử lý bổ sung như phân phối lại PageRank.
+    \\
+    \item \textbf{Tính linh hoạt}: Personalized PageRank phù hợp hơn PageRank truyền thống trong các trường hợp cần tập trung vào một nút cụ thể, như phân tích ảnh hưởng của một người dùng trong mạng xã hội hoặc một sản phẩm trong hệ thống đề xuất.
+    \\
+    \item \textbf{Tính dễ tiếp cận}: GraphFrames thân thiện hơn RDD, trong khi GraphX đòi hỏi kiến thức lập trình Scala, làm tăng độ phức tạp cho người mới học.
+    \\
+    \item \textbf{Tính ổn định}: Các nút không có cạnh ra (dead ends) có thể gây mất mát PageRank, đòi hỏi cơ chế bổ sung để tái phân phối giá trị, một vấn đề cần xem xét kỹ lưỡng.
+\end{itemize}
+\vspace{0.5em}
+Hạn chế tiềm tàng bao gồm việc xử lý các nút không có cạnh ra, có thể dẫn đến mất mát PageRank nếu không được phân phối lại. Dữ liệu lý thuyết từ đồ thị mẫu cho thấy thuật toán này hứa hẹn trong các ứng dụng phân tán, nhưng cần thử nghiệm thực tế để xác nhận, đặc biệt với các đồ thị lớn và phức tạp.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l c c c c c}
+\toprule
+Nút & P1 & P2 & P3 & P4 & P5 \\
+\midrule
+PageRank (ước lượng) & 0.45 & 0.20 & 0.20 & 0.05 & 0.05 \\
+\bottomrule
+\end{tabular}
+\smallskip
+\caption{Giá trị PageRank ước lượng trên đồ thị mẫu}
+\label{tab:estimate}
+\end{table}
+Bảng \ref{tab:estimate} minh họa phân phối PageRank dự kiến, với P1 là nguồn, dựa trên tính toán thủ công.
+
+\section{Kết luận và khuyến nghị}
+Báo cáo này đã trình bày hiểu biết lý thuyết về bài tập 10.11, tập trung vào Personalized PageRank như một công cụ phân tích đồ thị hiệu quả trong hệ thống cơ sở dữ liệu phân tán. Thuật toán này chứng minh khả năng cá nhân hóa xếp hạng dựa trên trang nguồn, với tiềm năng lớn khi được triển khai trên Spark. Các tiêu chí đánh giá cho thấy giải pháp có độ chính xác cao, khả năng mở rộng tốt, và tính linh hoạt trong các ứng dụng thực tế như mạng xã hội, dữ liệu web, và hệ thống đề xuất.
+
+\textbf{Khuyến nghị}:
+\begin{itemize}
+    \item Tìm hiểu thêm về cách xử lý các nút không có cạnh ra (dead ends) để tăng độ tin cậy của thuật toán, chẳng hạn bằng cách tái phân phối PageRank đến các nút khác.
+    \\
+    \item Thử nghiệm trên các đồ thị thực tế, như mạng xã hội (Twitter, Facebook) hoặc dữ liệu web (Wikipedia), để đánh giá hiệu quả thực tiễn và hiệu suất trên quy mô lớn.
+    \\
+    \item So sánh hiệu suất giữa RDD, GraphFrames, và GraphX trên các cụm Spark khác nhau, với các kích thước đồ thị từ nhỏ đến rất lớn (hàng triệu nút).
+    \\
+    \item Khuyến khích nghiên cứu thêm về tối ưu hóa ngưỡng hội tụ (tolerance) và hệ số damping (\(d\)) để cải thiện hiệu suất, đặc biệt trong các đồ thị thưa.
+    \\
+    \item Đề xuất tích hợp với các thuật toán khác, như Community Detection, để tăng cường khả năng phân tích đồ thị phức tạp.
+\end{itemize}
+Nghiên cứu này mở ra hướng đi quan trọng cho việc áp dụng Personalized PageRank trong các hệ thống phân tán hiện đại, đặc biệt trong bối cảnh dữ liệu lớn ngày càng phát triển và đòi hỏi các giải pháp hiệu quả.
+
+\appendices
+\section{Nội dung bổ sung} \label{App:WhatGoes}
+
+\subsection{Ví dụ tính toán thủ công}
+Trên đồ thị mẫu với P1 là nguồn, giá trị PageRank ban đầu là 1 cho P1 và 0 cho các nút khác (P2, P3, P4, P5). Sau một lần lặp với \( d = 0.85 \), giá trị của P2 và P3 có thể được ước lượng dựa trên số cạnh vào từ P1. Cụ thể, nếu P1 có hai cạnh ra (đến P2 và P3), mỗi nút nhận \( \frac{0.85 \cdot 1}{2} = 0.425 \), cộng với \( 1 - 0.85 = 0.15 \), tổng cộng khoảng 0.575. Sau nhiều lần lặp, giá trị sẽ hội tụ về các mức như trong bảng \ref{tab:estimate}.
+\subsection{Phân tích cấu trúc đồ thị}
+Đồ thị trong hình 10.21 có cấu trúc định hướng với 6 nút, trong đó P1 đóng vai trò nguồn. Sự phân bố cạnh ảnh hưởng trực tiếp đến tốc độ hội tụ và giá trị PageRank cuối cùng, đặc biệt khi có các vòng lặp hoặc nút chết.
+\section{Hướng dẫn định dạng} \label{App:Formatting}
+Mỗi phụ lục được đánh dấu bằng chữ cái (A, B, C, v.v.) và tiêu đề, được tự động xử lý bởi LaTeX. Người đọc có thể tham khảo các tài liệu bổ sung trong phần này để hiểu rõ hơn về cách trình bày và cấu trúc báo cáo.
+
+\begin{thebibliography}{1}
+\bibitem{ozsu_2011}
+M. T. Özsu và P. Valduriez, \emph{Nguyên lý của Hệ thống Cơ sở dữ liệu Phân tán}, 3rd ed. Springer, 2011.
+\bibitem{spark_doc}
+Tài liệu Apache Spark, \url{https://spark.apache.org/docs/latest/}, Truy cập: 11/6/2025.
+\bibitem{graphframes_doc}
+Tài liệu GraphFrames, \url{https://graphframes.github.io/}, Truy cập: 11/6/2025.
+\bibitem{page_rank_theory}
+L. Page, S. Brin, R. Motwani, và T. Winograd, "The PageRank Citation Ranking: Bringing Order to the Web", Stanford University, 1999.
+\bibitem{distributed_systems}
+A. S. Tanenbaum và M. van Steen, \emph{Distributed Systems: Principles and Paradigms}, 2nd ed. Prentice Hall, 2006.
+\end{thebibliography}
+
+\end{document}

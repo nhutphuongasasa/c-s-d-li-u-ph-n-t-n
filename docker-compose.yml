@@ -1,0 +1,42 @@
+services:
+  spark-master:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_IP=spark-master
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    networks:
+      - spark-network
+
+  spark-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2g
+      - SPARK_LOCAL_IP=spark-worker
+    ports:
+      - "8081:8081"
+    command: >
+      /bin/bash -c "
+        sleep 10 &&
+        /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+      "
+    networks:
+      - spark-network
+
+networks:
+  spark-network:
+    driver: bridge
