@@ -75,8 +75,8 @@ def personalized_page_rank(graph, source_id=1):
             ) \
             .na.fill({"msg_sum": 0}) \
             .withColumn("new_pr", 
-                (1 - damping_factor) * col("msg_sum") + 
-                damping_factor * col("is_source")
+                (1 - damping_factor) * col("is_source") + 
+                damping_factor * col("msg_sum")
             )
 
         diff = new_pr.select(
